@@ -40,11 +40,13 @@ public class USSD extends ReactContextBaseJavaModule {
     private int SIMCount = 0;
     private final ReactApplicationContext context;
     private Boolean executing = false;
+    private USSDController ussdApi;
 
     @SuppressLint("MissingPermission")
     USSD(ReactApplicationContext context) {
         super(context);
         this.context = context;
+        this.ussdApi = USSDController.getInstance(context);
         map.put("KEY_LOGIN", new HashSet<>(Arrays.asList("espere", "waiting", "loading", "esperando")));
         map.put("KEY_ERROR", new HashSet<>(Arrays.asList("problema", "problem", "error", "null")));
 
@@ -109,7 +111,7 @@ public class USSD extends ReactContextBaseJavaModule {
 
     @ReactMethod
     public void executeUSSD(String ussd, int sim, boolean confirm, Promise promise) {
-        USSDController ussdApi = USSDController.getInstance(context);
+
         ussdApi.verifyAccesibilityAccess(context.getCurrentActivity());
         ussdApi.verifyOverLay(context.getCurrentActivity());
         if (executing)
@@ -198,7 +200,6 @@ public class USSD extends ReactContextBaseJavaModule {
             count++;
             TelephonyManager telephonyManager = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
             String carrier = telephonyManager.getSimOperatorName();
-
         }
     }
 
