@@ -32,7 +32,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
 public class USSD extends ReactContextBaseJavaModule {
 
     private final TelephonyManager[] SIMManagers = new TelephonyManager[3];
@@ -41,6 +40,7 @@ public class USSD extends ReactContextBaseJavaModule {
     private final ReactApplicationContext context;
     private Boolean executing = false;
     private USSDController ussdApi;
+    String list;
 
     @SuppressLint("MissingPermission")
     USSD(ReactApplicationContext context) {
@@ -202,5 +202,7 @@ public class USSD extends ReactContextBaseJavaModule {
             String carrier = telephonyManager.getSimOperatorName();
         }
     }
+
+
 
 }
