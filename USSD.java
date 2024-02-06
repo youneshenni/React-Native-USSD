@@ -1,37 +1,32 @@
-package com.mobile.USSD;
+package com.siraj.topup.USSD;
 
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.bridge.Promise;
+import com.facebook.react.bridge.ReadableArray;
 import com.klinker.android.send_message.Message;
 import com.klinker.android.send_message.Settings;
 import com.klinker.android.send_message.Transaction;
-import com.romellfudi.ussdlibrary.USSDApi;
 import com.romellfudi.ussdlibrary.USSDController;
 import com.tuenti.smsradar.Sms;
 import com.tuenti.smsradar.SmsListener;
 import com.tuenti.smsradar.SmsRadar;
-
 import android.annotation.SuppressLint;
-import android.app.PendingIntent;
 import android.content.Context;
-import android.content.Intent;
 import android.telecom.PhoneAccountHandle;
 import android.telecom.TelecomManager;
-import android.telephony.SmsManager;
 import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
-import android.util.Log;
-
 import androidx.annotation.NonNull;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
 public class USSD extends ReactContextBaseJavaModule {
 
     private final TelephonyManager[] SIMManagers = new TelephonyManager[3];
@@ -40,7 +35,6 @@ public class USSD extends ReactContextBaseJavaModule {
     private final ReactApplicationContext context;
     private Boolean executing = false;
     private USSDController ussdApi;
-    String list;
 
     @SuppressLint("MissingPermission")
     USSD(ReactApplicationContext context) {
@@ -110,8 +104,12 @@ public class USSD extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
-    public void executeUSSD(String ussd, int sim, boolean confirm, Promise promise) {
-
+    public void executeUSSD(String ussd, int sim, ReadableArray navigationArray, Promise promise) {
+        ArrayList<Object> navigationObject = navigationArray.toArrayList();
+        ArrayList<String> navigation = new ArrayList<>();
+        for (Object o : navigationObject) {
+            navigation.add((String) o);
+        }
         ussdApi.verifyAccesibilityAccess(context.getCurrentActivity());
         ussdApi.verifyOverLay(context.getCurrentActivity());
         if (executing)
@@ -121,8 +119,10 @@ public class USSD extends ReactContextBaseJavaModule {
             @Override
             public void responseInvoke(String message) {
                 // message has the response string data
-                if (confirm) {
-                    ussdApi.send("1", new USSDController.CallbackMessage() {
+                if (!navigation.isEmpty()) {
+                    String nextCode = navigation.remove(0);
+
+                    ussdApi.send(nextCode, new USSDController.CallbackMessage() {
                         @Override
                         public void responseMessage(String message) {
                             // message has the response string data from USSD
@@ -130,9 +130,19 @@ public class USSD extends ReactContextBaseJavaModule {
                                 Thread.sleep(100);
                             } catch (InterruptedException e) {
                             }
-                            executing = false;
-                            ussdApi.cancel();
-                            promise.resolve(message);
+                            if (!navigation.isEmpty())
+                                navigate(navigation, promise);
+                            else {
+                                ussdApi.cancel();
+                                executing = false;
+                                try {
+                                    Thread.sleep(100);
+
+                                } catch (InterruptedException e) {
+
+                                }
+                                promise.resolve(message);
+                            }
                         }
                     });
                 } else {
@@ -156,11 +166,9 @@ public class USSD extends ReactContextBaseJavaModule {
         });
     }
 
-
-
     @SuppressLint("MissingPermission")
     @ReactMethod
-    public void sendSMS(  int sim,String destination,String message, Promise promise) {
+    public void sendSMSQuery(int sim, String destination, String message, Promise promise) {
         Settings sendSettings = new Settings();
         SubscriptionManager subscriptionManager = (SubscriptionManager) context
                 .getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE);
@@ -184,6 +192,17 @@ public class USSD extends ReactContextBaseJavaModule {
         sendTransaction.sendNewMessage(mMessage, Transaction.NO_THREAD_ID);
     }
 
+    @SuppressLint("MissingPermission")
+    public void sendSMS(int sim, String destination, String message, Promise promise) {
+        Settings sendSettings = new Settings();
+        SubscriptionManager subscriptionManager = (SubscriptionManager) context
+                .getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE);
+        sendSettings.setSubscriptionId(
+                subscriptionManager.getActiveSubscriptionInfoForSimSlotIndex(sim).getSubscriptionId());
+        Transaction sendTransaction = new Transaction(context, sendSettings);
+        Message mMessage = new Message(message, destination);
+        sendTransaction.sendNewMessage(mMessage, Transaction.NO_THREAD_ID);
+    }
 
     @SuppressLint("MissingPermission")
     public void getSIMCards() {
@@ -203,6 +222,63 @@ public class USSD extends ReactContextBaseJavaModule {
         }
     }
 
+    @SuppressLint("MissingPermission")
+    @ReactMethod
+    public void getOffers(int sim, String code, String regex, String nextCode, Promise promise) {
+        Pattern RegExp = Pattern.compile(regex);
+        String acc = "";
+        ussdApi.verifyAccesibilityAccess(context.getCurrentActivity());
+        ussdApi.verifyOverLay(context.getCurrentActivity());
+        if (executing)
+            promise.reject(new Error("A USSD code is already being executed"));
+        executing = true;
+        ussdApi.callUSSDInvoke(code, sim, map, new USSDController.CallbackInvoke() {
+            @Override
+            public void responseInvoke(String message) {
+                navigate(acc, message, nextCode, RegExp, promise);
+                // message has the response string data
+            }
 
+            @Override
+            public void over(String message) {
+                executing = false;
+                promise.resolve(message);
+            }
+        });
+    }
 
+    private void navigate(String acc, String message, String nextCode, Pattern RegExp, Promise promise) {
+        acc += '\n' + message;
+        boolean next = RegExp.matcher(message).find();
+        if (next) {
+            String finalAcc = acc;
+            ussdApi.send(nextCode, new USSDController.CallbackMessage() {
+                @Override
+                public void responseMessage(String message) {
+                    navigate(finalAcc, message, nextCode, RegExp, promise);
+                }
+            });
+        } else {
+            ussdApi.cancel();
+            executing = false;
+            promise.resolve(acc);
+        }
+
+    }
+
+    private void navigate(ArrayList<String> nextCodes, Promise promise) {
+        String nextCode = nextCodes.remove(0);
+        ussdApi.send(nextCode, new USSDController.CallbackMessage() {
+            @Override
+            public void responseMessage(String message) {
+                if (nextCodes.isEmpty()) {
+                    ussdApi.cancel();
+                    executing = false;
+                    promise.resolve(message);
+                } else
+                    navigate(nextCodes, promise);
+            }
+        });
+
+    }
 }

@@ -1,12 +1,11 @@
-package com.mobile.USSD;
+package com.siraj.topup.USSD;
 
 import android.content.res.Resources;
 import android.content.res.XmlResourceParser;
 import android.telephony.TelephonyManager;
 import android.util.Log;
 
-import com.mobile.R;
-
+import com.siraj.topup.R;
 
 public class SIM {
     // Main attributes
@@ -19,8 +18,6 @@ public class SIM {
     private static final int DJEZZY = 1;
     private static final int OOREDOO = 2;
 
-
-
     TelephonyManager manager;
 
     SIM(TelephonyManager manager) {
@@ -30,11 +27,13 @@ public class SIM {
         String operator = manager.getSimOperatorName();
         Log.v("USSD", operator);
         switch (operator) {
-            case "Mobilis": this.operator = MOBILIS;
-            case "Djezzy": this.operator = DJEZZY;
-            case "Ooredoo": this.operator = OOREDOO;
+            case "Mobilis":
+                this.operator = MOBILIS;
+            case "Djezzy":
+                this.operator = DJEZZY;
+            case "Ooredoo":
+                this.operator = OOREDOO;
         }
-
 
     }
 }
